@@ -1,6 +1,7 @@
 using Rasters, DimensionalData, Rasters.Lookups, Proj
 using Test
 using DimensionalData: @dim, YDim
+import Unitful
 include(joinpath(dirname(pathof(Rasters)), "../test/test_utils.jl"))
 
 @testset "cellarea" begin
@@ -70,4 +71,29 @@ include(joinpath(dirname(pathof(Rasters)), "../test/test_utils.jl"))
     # test missing crs throws an error
     nocrsdimz = setcrs(dimz, nothing)
     @test_throws ArgumentError cellarea(nocrsdimz)
+
+    @testset "Unitful cellarea" begin
+         # Case 1: cellarea with unitful manifold
+         # This is the simplest case
+         unitful_manifold = Spherical(; radius = Spherical().radius * Unitful.u"m")
+         unitful_cellarea = cellarea(unitful_manifold, dimz_3857)
+         @test unitful_cellarea isa Raster{<:Unitful.Quantity}
+         @test Unitful.ustrip.(parent(unitful_cellarea)) == cellarea(Spherical(; radius = unitful_manifold.radius |> Unitful.ustrip), dimz_3857)
+         # Case 2: unitful dimensions
+         ux_3857 = rebuild(x_3857; val = rebuild(val(x_3857); data = val(x_3857) .* Unitful.u"m", span = Regular(val(x_3857).span.step * Unitful.u"m")))
+         uy_3857 = rebuild(y_3857; val = rebuild(val(y_3857); data = val(y_3857) .* Unitful.u"m", span = Regular(val(y_3857).span.step * Unitful.u"m")))
+         unitful_dimz_3857 = (ux_3857, uy_3857)
+         @test cellarea(Planar(), unitful_dimz_3857) isa Raster{<:Unitful.Quantity}
+         @test Unitful.ustrip.(parent(cellarea(Planar(), unitful_dimz_3857))) == parent(cellarea(Planar(), dimz_3857))
+         # Unitful lookups shouldn't work without a unitful manifold
+         @test_throws Unitful.DimensionError cellarea(unitful_dimz_3857)
+         # The tests below fail because Unitful apparently can't convert to Float64...
+         # (see https://github.com/PainterQubits/Unitful.jl/issues/742)
+         # But we also have to re-convert back to the original unit type, which cellarea currently
+         # doesn't do.
+
+         # unitful_cellarea = cellarea(unitful_manifold, unitful_dimz_3857)
+         # @test unitful_cellarea isa Raster{<:Unitful.Quantity}
+         # @test Unitful.ustrip.(unitful_cellarea) == cellarea(unitful_manifold, dimz_3857)
+    end
 end
