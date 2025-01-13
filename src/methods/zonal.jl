@@ -12,6 +12,12 @@ covered by the `of` object/s.
 
 # Keywords
 $GEOMETRYCOLUMN_KEYWORD
+- `bylayer`: **Only relevant if `x` is a `RasterStack`.** `true` (default) to apply `f` to each layer of a `RasterStack` individually. 
+  In this case, `f` gets each layer separately, and the results are recombined into a NamedTuple.
+  If `false`, `f` gets a cropped and masked `RasterStack` as a whole, and must be able to handle that.  This is useful for performing e.g
+  weighted statistics or multi-layer operations.
+  Functions like `Statistics.mean` cannot handle NamedTuple input, so you will want to set `bylayer = true` for those.
+
 These can be used when `of` is or contains (a) GeoInterface.jl compatible object(s):
 
 - `shape`: Force `data` to be treated as `:polygon`, `:line` or `:point`, where possible.
@@ -81,11 +87,17 @@ _zonal(f, x::RasterStackOrArray, of::DimTuple; kw...) =
 # We don't need to `mask` with an extent, it's square so `crop` will do enough.
 _zonal(f, x::Raster, of::Extents.Extent; skipmissing=true) =
     _maybe_skipmissing_call(f, crop(x; to=of, touches=true), skipmissing)
-function _zonal(f, x::RasterStack, ext::Extents.Extent; skipmissing=true)
+function _zonal(f, x::RasterStack, ext::Extents.Extent; skipmissing=true, bylayer=true)
     cropped = crop(x; to=ext, touches=true)
     prod(size(cropped)) > 0 || return missing
-    return maplayers(cropped) do A
-        _maybe_skipmissing_call(f, A, skipmissing)
+    if bylayer # apply f to each layer
+        return maplayers(cropped) do A
+            prod(size(A)) > 0 || return missing
+            _maybe_skipmissing_call(f, A, skipmissing)
+        end
+    else # apply f to the whole stack
+        prod(size(cropped)) > 0 || return missing
+        return _maybe_skipmissing_call(f, cropped, skipmissing)
     end
 end
 # Otherwise of is a geom, table or vector
@@ -104,14 +116,19 @@ function _zonal(f, x::AbstractRaster, ::GI.AbstractGeometryTrait, geom;
     return _maybe_skipmissing_call(f, masked, skipmissing)
 end
 function _zonal(f, st::AbstractRasterStack, ::GI.AbstractGeometryTrait, geom; 
-    skipmissing=true, kw...
+    skipmissing=true, bylayer=true, kw...
 )
     cropped = crop(st; to=geom, touches=true)
     prod(size(cropped)) > 0 || return map(_ -> missing, layerdims(st))
     masked = mask(cropped; with=geom, kw...)
-    return maplayers(masked) do A
-        prod(size(A)) > 0 || return missing
-        _maybe_skipmissing_call(f, A, skipmissing)
+    if bylayer # apply f to each layer
+        return maplayers(mask) do A
+            prod(size(A)) > 0 || return missing
+            _maybe_skipmissing_call(f, A, skipmissing)
+        end
+    else # apply f to the whole stack
+        prod(size(masked)) > 0 || return missing
+        return _maybe_skipmissing_call(f, masked, skipmissing)
     end
 end
 function _zonal(f, x::RasterStackOrArray, ::Nothing, data; 
@@ -128,12 +145,49 @@ function _zonal(f, x::RasterStackOrArray, ::Nothing, data;
     return zs
 end
 
+function _zonal_error_check(f, x, geom; kw...)
+    try
+        return _zonal(f, x, geom; kw...)
+    catch e
+        # Check if the error is because the function doesn't accept empty iterators
+        if e isa ArgumentError && occursin("reducing over an empty collection is not allowed", e.msg)
+            @warn("""
+                The function cannot handle empty iterators. You need to supply an `init` value.
+                If your original call was `zonal(f, x; of, kw...)`, try:
+                `zonal(x -> f(x; init=...), x; of, kw...)`
+                """
+            )
+        # Check if the error is because the function doesn't accept NamedTuples
+        elseif e isa MethodError && 
+            x isa AbstractRasterStack &&
+            get(kw, :bylayer, true) == false
+            namedtuple_arg_idx = findfirst(
+                a -> a isa NamedTuple &&
+                ((eltype(a) <: Missing) || (a isa eltype(x))),
+                e.args
+            )
+            if !isnothing(namedtuple_arg_idx)
+                @warn("""
+                The function you passed to `zonal` cannot handle a RasterStack's values directly,
+                as they are NamedTuples of the form `(; varname = value, ...)`.
+
+                Set `bylayer=true` to apply the function to each layer of the stack separately, 
+                or change the function to accept NamedTuple input.
+                """)
+            end
+        end
+
+        rethrow(e)
+    end
+end
+
 function _alloc_zonal(f, x, geoms, n; kw...)
     # Find first non-missing entry and count number of missing entries
     n_missing::Int = 0
-    z1 = _zonal(f, x, first(geoms); kw...)
+    
+    z1 = _zonal_error_check(f, x, first(geoms); kw...)
     for geom in geoms
-        z1 = _zonal(f, x, geom; kw...)
+        z1 = _zonal_error_check(f, x, geom; kw...)
         if !ismissing(z1)
             break
         end

@@ -316,15 +316,65 @@ end
         sum(st)
 
     @testset "skipmissing" begin
-        a = Array{Union{Missing,Int}}(undef, 26, 31)
-        a .= (1:26) * (1:31)'
-        a[1:10, 3:10] .= missing
-        rast = Raster(a, (X(-20:5), Y(0:30)))
+        _arr = Array{Union{Missing,Int}}(undef, 26, 31)
+        _arr .= (1:26) * (1:31)'
+        _arr[1:10, 3:10] .= missing
+        rast = Raster(_arr, (X(-20:5), Y(0:30)))
         @test zonal(sum, rast; of=polygon, skipmissing=false) === missing
         @test zonal(sum, rast; of=polygon, skipmissing=true) isa Int
         @test !zonal(x -> x isa Raster, rast; of=polygon, skipmissing=true)
         @test zonal(x -> x isa Raster, rast; of=polygon, skipmissing=false)
     end
+
+    @testset "bylayer=true" begin
+        # Test bylayer=true for RasterStack
+        st = RasterStack((; a, b, c))
+        # Test that bylayer=true gives same results as individual layers
+        @test zonal(sum, st; of=polygon, bylayer=true) == 
+            map(layer -> zonal(sum, layer; of=polygon), st)
+        # Test that bylayer=true works with multiple polygons
+        @test zonal(sum, st; of=[polygon, polygon], bylayer=true) == 
+            map(layer -> zonal(sum, layer; of=[polygon, polygon]), st)
+        # Test that bylayer=true works with extent
+        @test zonal(sum, st; of=st, bylayer=true) ==
+            map(sum, st)
+    end
+
+    @testset "zonal error warnings" begin
+        mr = Raster(fill(missing, dims(a)))
+        # Test warning for empty iterator
+        @test_warn r"The function cannot handle empty iterators.*" begin
+            try
+                zonal(minimum, mr; of = [polygon], bylayer = true, skipmissing = true)
+            catch e
+                @test e isa ArgumentError
+            end
+        end
+
+        # Test warning for NamedTuple input with bylayer=false 
+        @test_warn r"The function you passed to `zonal` cannot handle a RasterStack's values directly.*" begin
+            try
+                zonal(mean, st; of = [polygon], bylayer=false)
+            catch e
+                @test e isa MethodError
+            end
+        end
+    end
+
+    # TODO: this will not work, until we fix skipmissing for RasterStacks.
+    # @testset "bylayer=false" begin
+    #     # Test bylayer=false for RasterStack
+    #     st = RasterStack((; a, b, c))
+    #     # Test that bylayer=false gives results for whole stack at once
+    #     @test zonal(sum, st; of=polygon, bylayer=false) == 
+    #         sum(skipmissing(mask(st; with=polygon)))
+    #     # Test that bylayer=false works with multiple polygons
+    #     @test zonal(sum, st; of=[polygon, polygon], bylayer=false) == 
+    #         [sum(skipmissing(mask(st; with=p))) for p in [polygon, polygon]]
+    #     # Test that bylayer=false works with extent
+    #     @test zonal(sum, st; of=st, bylayer=false) ==
+    #         sum(st)
+    # end
 end
 
 @testset "zonal return missing" begin
