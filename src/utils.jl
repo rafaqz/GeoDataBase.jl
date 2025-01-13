@@ -211,12 +211,19 @@ function _get_geometries(data, ::Nothing)
         data
     else
         trait = GI.trait(data)
-        if trait isa GI.FeatureCollectionTrait
+        if trait isa GI.AbstractFeatureCollectionTrait
             [GI.geometry(f) for f in GI.getfeature(data)]
+        elseif trait isa GI.AbstractGeometryCollectionTrait
+            GI.getgeom(data)
+        elseif trait isa GI.AbstractFeatureTrait
+            GI.geometry(data)
         elseif isnothing(trait)
             collect(data)
-        else
+        elseif trait isa GI.AbstractGeometryTrait
+            # data is already a geometry, so return as-is
             data
+        else
+            ArgumentError("data has $trait, which is not handled")
         end
     end
     # check if data iterates valid geometries before returning
