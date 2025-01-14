@@ -24,14 +24,14 @@ function _burn_polygon!(B::AbstractDimArray, trait, geom;
     # Lines
     n_on_line = 0
     if boundary !== :center
-        _check_intervals(B, boundary)
+        _check_intervals(B, boundary, verbose)
         if boundary === :touches 
-            if _check_intervals(B, boundary)
+            if _check_intervals(B, boundary, verbose)
                 # Add line pixels
                 n_on_line = _burn_lines!(B, geom; fill)::Int
             end
         elseif boundary === :inside 
-            if _check_intervals(B, boundary)
+            if _check_intervals(B, boundary, verbose)
                 # Remove line pixels
                 n_on_line = _burn_lines!(B, geom; fill=!fill)::Int
             end
@@ -135,9 +135,9 @@ end
 
 const INTERVALS_INFO = "makes more sense on `Intervals` than `Points` and will have more correct results. You can construct dimensions with a `X(values; sampling=Intervals(Center()))` to achieve this"
 
-@noinline _check_intervals(B) = 
-    _chki(B) ? true : (@info "burning lines $INTERVALS_INFO"; false)
-@noinline _check_intervals(B, boundary) =
-    _chki(B) ? true : (@info "`boundary=:$boundary` $INTERVALS_INFO"; false)
+@noinline _check_intervals(B, verbose::Bool) = 
+    _chki(B) ? true : (verbose && @info "burning lines $INTERVALS_INFO"; false)
+@noinline _check_intervals(B, boundary, verbose::Bool) =
+    _chki(B) ? true : (verbose && @info "`boundary=:$boundary` $INTERVALS_INFO"; false)
 
 _chki(B) = all(map(s -> s isa Intervals, sampling(dims(B)))) 

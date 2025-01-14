@@ -4,29 +4,22 @@
 # TODO merge this with `create` somehow
 _init_bools(to; kw...) = _init_bools(to, BitArray; kw...)
 _init_bools(to, T::Type; kw...) = _init_bools(to, T, nothing; kw...)
-_init_bools(to::AbstractRasterSeries, T::Type, data; kw...) = _init_bools(first(to), T, data; kw...)
-_init_bools(to::AbstractRasterStack, T::Type, data; kw...) = _init_bools(first(to), T, data; kw...)
-_init_bools(to::AbstractRaster, T::Type, data; kw...) = _init_bools(to, dims(to), T, data; kw...)
-_init_bools(to::DimTuple, T::Type, data; kw...) = _init_bools(to, to, T, data; kw...)
-function _init_bools(to::Nothing, T::Type, data; 
-    geometrycolumn=nothing, 
-    collapse=nokw, 
-    res=nokw,
-    size=nokw,
-    kw...
-)
+_init_bools(to::AbstractRasterSeries, T::Type, data; kw...) =
+    _init_bools(dims(first(to)), T, data; kw...)
+_init_bools(to::AbstractRasterStack, T::Type, data; kw...) =
+    _init_bools(dims(to), dims(to), T, data; kw...)
+_init_bools(to::AbstractRaster, T::Type, data; kw...) =
+    _init_bools(to, dims(to), T, data; kw...)
+_init_bools(to::DimTuple, T::Type, data; kw...) =
+    _init_bools(to, to, T, data; kw...)
+function _init_bools(to::Nothing, T::Type, data; geometrycolumn=nothing, kw...)
     # Get the extent of the geometries
     ext = _extent(data; geometrycolumn)
     isnothing(ext) && throw(ArgumentError("no recognised dimensions, extent or geometry"))
-    return _init_bools(ext, T, data; collapse, res, size, kw...)
+    return _init_bools(ext, T, data; kw...)
 end
-function _init_bools(to::Extents.Extent, T::Type, data;
-    collapse=nokw, size=nokw, res=nokw, sampling=nokw, kw...
-)
-    # Convert the extent to dims (there must be `res` or `size` in `kw`)
-    dims = _extent2dims(to; size, res, sampling, kw...)
-    _init_bools(to, dims, T, data; collapse, kw...)
-end
+_init_bools(to::Extents.Extent, T::Type, data; kw...) =
+    _init_bools(to, _extent2dims(to; kw...), T, data; kw...)
 function _init_bools(to, dims::DimTuple, T::Type, data; 
     collapse::Union{Bool,Nothing,NoKW}=nokw, kw...
 )
@@ -54,7 +47,7 @@ function _alloc_bools(to, dims::DimTuple, ::Type{<:Array{T}};
     missingval=false, metadata=NoMetadata(), kw...
 ) where T
     # Use an Array
-    data = fill!(Raster{T}(undef, dims), missingval) 
+    data = fill!(Raster{T}(undef, dims), missingval)
     return rebuild(data; missingval, metadata)
 end
 
@@ -69,7 +62,9 @@ function _prepare_for_burning(B, locus=Center())
 end
 
 # Convert to Array if its not one already
-_lookup_as_array(d::Dimension) = parent(lookup(d)) isa Array ? d : modify(Array, d) 
+_lookup_as_array(x) = setdims(x, _lookup_as_array(dims(x)))
+_lookup_as_array(dims::Tuple) = map(_lookup_as_array, dims)
+_lookup_as_array(d::Dimension) = parent(lookup(d)) isa Array ? d : modify(Array, d)
 
 function _forward_ordered(B)
     reduce(dims(B); init=B) do A, d

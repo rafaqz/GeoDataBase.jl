@@ -35,7 +35,8 @@ $SUFFIX_KEYWORD
 
 These can be used when `with` is a GeoInterface.jl compatible object:
 
-$SHAPE_KEYWORDS
+$SHAPE_KEYWORD
+$BOUNDARY_KEYWORD
 $GEOMETRYCOLUMN_KEYWORD
 
 # Example
@@ -332,7 +333,8 @@ function boolmask!(dest::AbstractRaster, data;
     lock=nothing, 
     progress=true, 
     threaded=false, 
-    allocs=_burning_allocs(dest; threaded), 
+    burncheck_metadata=Metadata(),
+    allocs=_burning_allocs(dest; threaded, burncheck_metadata), 
     geometrycolumn=nothing,
     collapse=nokw,
     kw...

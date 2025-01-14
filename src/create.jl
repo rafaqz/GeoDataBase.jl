@@ -291,15 +291,15 @@ function create(filename::AbstractString, source::Source, ::Type{T}, dims::Tuple
     end
     # Create layers of zero arrays
     rast = Raster(A, dims; name, missingval=mv_inner)
+    # Write to disk
     Rasters.write(f, filename, source, rast;
-        eltype, chunks, metadata, scale, offset, missingval, verbose, force, coerce, write, kw...
+        eltype, chunks, metadata, scale, offset, missingval=mv_inner, verbose, force, coerce, write, kw...
     ) do W
-        # write returns a variable, wrap it as a Raster
+        # `write`` returns a variable, wrap it as a Raster and run f
         f(rebuild(rast; data=W))
     end
     # Don't pass in `missingval`, read it again from disk in case it changed
-    r = Raster(filename; source, lazy, metadata, dropband, coerce, missingval=mv_outer)
-    return r
+    return Raster(filename; source, lazy, metadata, dropband, coerce, missingval=mv_outer)
 end
 # Create on-disk RasterStack from filename, source, type and dims
 function create(filename::AbstractString, source::Source, layertypes::NamedTuple, dims::Tuple;

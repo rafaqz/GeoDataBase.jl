@@ -61,9 +61,8 @@ nothing
 
 $EXPERIMENTAL
 """
-function mosaic(f::Function, r1::RasterStackOrArray, rs::RasterStackOrArray...; kw...)
+mosaic(f::Function, r1::RasterStackOrArray, rs::RasterStackOrArray...; kw...) =
     mosaic(f, (r1, rs...); kw...)
-end
 mosaic(f::Function, regions; kw...) = _mosaic(f, first(regions), regions; kw...)
 function _mosaic(f::Function, A1::AbstractRaster, regions;
     missingval=nokw,
@@ -74,23 +73,26 @@ function _mosaic(f::Function, A1::AbstractRaster, regions;
     force=false,
     kw...
 )
-    isnothing(missingval) && throw(ArgumentError("missingval cannot be `nothing` for `mosaic`"))
-    missingval = if isnokw(missingval)
+    V = Vector{promote_type(map(Missings.nonmissingtype ∘ eltype, regions)...)}
+    T = Base.promote_op(f, V)
+    dims = _mosaic(Tuple(map(DD.dims, regions)))
+    l1 = first(regions)
+
+    missingval = if isnothing(missingval) 
+        throw(ArgumentError("missingval cannot be `nothing` for `mosaic`"))
+    elseif isnokw(missingval)
         mv = Rasters.missingval(first(regions)) 
         isnokwornothing(mv) ? missing : mv
     else
         missingval
     end
-    missingval_pair = if !isnothing(filename) && (ismissing(missingval) || isnokwornothing(missingval))
-        _type_missingval(eltype(A1)) => missing
-    elseif missingval isa Pair
+    missingval_pair = if missingval isa Pair
         missingval
+    elseif !isnothing(filename) && (ismissing(missingval) || isnokw(missingval))
+        _type_missingval(eltype(A1)) => missing
     else
         missingval => missingval
     end
-    T = Base.promote_type(typeof(last(missingval_pair)), Base.promote_eltype(regions...))
-    dims = _mosaic(Tuple(map(DD.dims, regions)))
-    l1 = first(regions)
 
     return create(filename, T, dims;
         name=name(l1),
@@ -100,10 +102,10 @@ function _mosaic(f::Function, A1::AbstractRaster, regions;
         options,
         force
     ) do C
-        _mosaic!(f, C, regions; missingval, kw...)
+        mosaic!(f, C, regions; missingval, kw...)
     end
 end
-function _mosaic(f::Function, ::AbstractRasterStack, regions;
+function _mosaic(f::Function, r1::AbstractRasterStack, regions;
     filename=nothing,
     suffix=keys(first(regions)),
     kw...
@@ -112,14 +114,14 @@ function _mosaic(f::Function, ::AbstractRasterStack, regions;
     layers = map(suffix, map(values, regions)...) do s, A...
         mosaic(f, A...; filename, suffix=s, kw...)
     end
-    return DD.rebuild_from_arrays(first(regions), Tuple(layers))
+    return DD.rebuild_from_arrays(r1, layers)
 end
 
 """
     mosaic!(f, x, regions...; missingval, atol)
     mosaic!(f, x, regions::Tuple; missingval, atol)
 
-Combine `regions` in `x` using the function `f`.
+Combine `regions` in `Raster` or `RasterStack` `x` using the function `f`.
 
 # Arguments
 
@@ -165,46 +167,135 @@ $EXPERIMENTAL
 """
 mosaic!(f::Function, dest::RasterStackOrArray, regions::RasterStackOrArray...; kw...) =
     _mosaic!(f, dest, regions; kw...)
-
-function _mosaic!(f::Function, A::AbstractRaster{T}, regions::Union{Tuple,AbstractArray};
+function mosaic!(
+    f::Function, dest::RasterStackOrArray,
+    regions::Union{Tuple,AbstractArray{<:RasterStackOrArray}}; 
+    op=_reduce_op(f, missingval(dest)), 
+    kw...
+)
+    _mosaic!(f, op, dest, regions; kw...)
+end
+function mosaic!(
+    f::typeof(mean), op::Nothing, dest::RasterStackOrArray,
+    regions::Union{Tuple,AbstractArray{<:RasterStackOrArray}};
+    kw...
+)
+    if length(regions) <= typemax(UInt8)
+        _mosaic_mean!(dest, UInt8, regions; kw...)
+    elseif length(regions) <= typemax(UInt16)
+        _mosiac_mean!(dest, UInt16, regions; kw...)
+    else
+        _mosiac_mean!(dest, UInt32, regions; kw...)
+    end
+end
+function mosaic!(
+    f::typeof(length), op::Nothing, dest::RasterStackOrArray, 
+    regions::Union{Tuple,AbstractArray{<:RasterStackOrArray}};
+    kw...
+)
+    for region in regions
+        _count_region!(dest, region; kw...)
+    end
+    return dest
+end
+# Where there is a known reduction operator we can apply each region as a whole
+function _mosaic!(
+    f::Function, op::Function, dest::RasterStackOrArray, regions::Union{Tuple,AbstractArray}; 
+    kw...
+)
+    for region in regions
+        _mosaic_region!(op, dest, region; kw...)
+    end
+    return dest
+end
+# Generic unknown functions
+function _mosaic!(
+    f::Function, op::Nothing, A::AbstractRaster{T}, regions::Union{Tuple,AbstractArray};
     missingval=missingval(A), atol=nothing
 ) where T
     isnokwornothing(missingval) && throw(ArgumentError("destination array must have a `missingval`"))
+    R = promote_type(map(Missings.nonmissingtype ∘ eltype, regions)...)
+    buffer = Vector{R}(undef, length(regions))
     _without_mapped_crs(A) do A1
         broadcast!(A1, DimSelectors(A1; atol)) do ds
             # Get all the regions that have this point
-            ls = foldl(regions; init=()) do acc, l
-                if DD.hasselection(l, ds)
-                    v = l[ds...]
-                    (acc..., l)
-                else
-                    acc
+            i = 0
+            for r in regions 
+                if DD.hasselection(r, ds)
+                    x = r[ds...]
+                    if x !== Rasters.missingval(r)
+                        i += 1
+                        buffer[i] = x
+                    end
                 end
             end
-            values = foldl(ls; init=()) do acc, l
-                v = l[ds...]
-                if isnothing(Rasters.missingval(l))
-                    (acc..., v)
-                elseif ismissing(Rasters.missingval(l))
-                    ismissing(v) ? acc : (acc..., v)
-                else
-                    v === Rasters.missingval(l) ? acc : (acc..., v)
-                end
-            end
-            if length(values) === 0
+            if i === 0
                 missingval
             else
-                f(values)
+                f(view(buffer, 1:i))
             end
         end
     end
     return A
 end
-function _mosaic!(f::Function, st::AbstractRasterStack, regions::Union{Tuple,AbstractArray}; kw...)
+function _mosaic!(f::Function, op::Nothing, st::AbstractRasterStack, regions::Union{Tuple,AbstractArray}; kw...)
     map(values(st), map(values, regions)...) do A, r...
         mosaic!(f, A, r...; kw...)
     end
     return st
+end
+
+function _mosaic_mean!(dest, ::Type{T}, regions; kw...) where T
+    # Note: sum and count are separate broadcasts because 
+    # most disk formats don't support writing a tuple
+
+    # Define a Raster to count into
+    counts = create(nothing, T, dest; missingval=zero(T))
+    counts .= zero(T)
+    for region in regions
+        # Add region to dest
+        _mosaic_region!(Base.add_sum, dest, region; kw...)
+        # Count region
+        _count_region!(counts, region; kw...)
+    end
+    # Divide dest by counts
+    # Avoid divide by zero for missing values
+    dest .= ((d, c) -> d === missingval(dest) ? missingval(dest) : d / c).(dest, counts)
+    return dest
+end
+function _mosaic_region!(op, dest, region; atol=nothing, kw...)
+    function skip_or_op(a, b) 
+        if b === missingval(region)
+            a
+        elseif a === missingval(dest) 
+            b
+        else
+            op(a, b)
+        end
+    end
+    ext = extent(region)
+    selectors = map(sampling(dest)) do sa
+        ispoints(sa) ? At(; atol) : Contains()
+    end
+    ds = DimSelectors(view(dest, ext); selectors)
+    # `parent` needed to skip broadcast checks
+    dest[ext] .= skip_or_op.(parent(view(dest, ext)), parent(view(region, ds)))
+    return dest
+end
+function _count_region!(count::AbstractRaster{T}, region::AbstractRaster; kw...) where T
+    function skip_or_count(a, b)
+        if b === missingval(region)
+            a
+        elseif a === missingval(count) 
+            oneunit(Missings.nonmissingtype(T))
+        else
+            a + oneunit(a)
+        end
+    end
+    ext = extent(region)
+    ds = DimSelectors(view(count, ext))
+    view(count, ext) .= skip_or_count.(view(count, ext), view(region, ds))
+    return count
 end
 
 _mosaic(alldims::Tuple{<:DimTuple,Vararg{DimTuple}}) = map(_mosaic, alldims...)

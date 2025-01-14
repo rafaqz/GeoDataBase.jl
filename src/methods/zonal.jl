@@ -72,16 +72,17 @@ insertcols!(january_stats, 1, :country => first.(split.(countries.ADMIN, r"[^A-Z
                                                   3 columns and 243 rows omitted
 ```
 """
-zonal(f, x::RasterStackOrArray; of, kw...) = _zonal(f, x, of; kw...)
+zonal(f, x::RasterStackOrArray; of, skipmissing=true, kw...) = 
+    _zonal(f, _prepare_for_burning(x), of; skipmissing, kw...)
 
 _zonal(f, x::RasterStackOrArray, of::RasterStackOrArray; kw...) = 
     _zonal(f, x, Extents.extent(of); kw...)
 _zonal(f, x::RasterStackOrArray, of::DimTuple; kw...) = 
     _zonal(f, x, Extents.extent(of); kw...)
 # We don't need to `mask` with an extent, it's square so `crop` will do enough.
-_zonal(f, x::Raster, of::Extents.Extent; skipmissing=true) =
+_zonal(f, x::Raster, of::Extents.Extent; skipmissing) =
     _maybe_skipmissing_call(f, crop(x; to=of, touches=true), skipmissing)
-function _zonal(f, x::RasterStack, ext::Extents.Extent; skipmissing=true)
+function _zonal(f, x::RasterStack, ext::Extents.Extent; skipmissing)
     cropped = crop(x; to=ext, touches=true)
     length(cropped) > 0 || return missing
     return maplayers(cropped) do A
@@ -96,7 +97,7 @@ _zonal(f, x, ::GI.AbstractFeatureCollectionTrait, fc; kw...) =
 _zonal(f, x::RasterStackOrArray, ::GI.AbstractFeatureTrait, feature; kw...) =
     _zonal(f, x, GI.geometry(feature); kw...)
 function _zonal(f, x::AbstractRaster, ::GI.AbstractGeometryTrait, geom; 
-    skipmissing=true, kw...
+    skipmissing, kw...
 )
     cropped = crop(x; to=geom, touches=true)
     length(cropped) > 0 || return missing
@@ -104,7 +105,7 @@ function _zonal(f, x::AbstractRaster, ::GI.AbstractGeometryTrait, geom;
     return _maybe_skipmissing_call(f, masked, skipmissing)
 end
 function _zonal(f, st::AbstractRasterStack, ::GI.AbstractGeometryTrait, geom; 
-    skipmissing=true, kw...
+    skipmissing, kw...
 )
     cropped = crop(st; to=geom, touches=true)
     length(cropped) > 0 || return map(_ -> missing, st)

@@ -30,15 +30,15 @@ const CRS_KEYWORD = """
 - `crs`: a `crs` which will be attached to the resulting raster when `to` not passed
    or is an `Extent`. Otherwise the crs from `to` is used.
 """
-
-const SHAPE_KEYWORDS = """
-- `shape`: Force `data` to be treated as `:polygon`, `:line` or `:point` geometries.
-    using points or lines as polygons may have unexpected results.
+const BOUNDARY_KEYWORD = """
 - `boundary`: for polygons, include pixels where the `:center` is inside the polygon,
     where the polygon `:touches` the pixel, or that are completely `:inside` the polygon.
     The default is `:center`.
 """
-
+const SHAPE_KEYWORD = """
+- `shape`: Force `data` to be treated as `:polygon`, `:line` or `:point` geometries.
+    using points or lines as polygons may have unexpected results.
+"""
 const THREADED_KEYWORD = """
 - `threaded`: run operations in parallel, `false` by default. In some circumstances `threaded` 
     can give large speedups over single-threaded operation. This can be true for complicated 
@@ -53,7 +53,8 @@ $TO_KEYWORD
 $RES_KEYWORD
 $SIZE_KEYWORD
 $CRS_KEYWORD
-$SHAPE_KEYWORDS
+$BOUNDARY_KEYWORD
+$SHAPE_KEYWORD
 """
 
 const DATA_ARGUMENT = """

@@ -22,10 +22,11 @@ function _burn_geometry!(B::AbstractRaster, trait::Nothing, data;
     lock=Threads.SpinLock(), 
     verbose=true, 
     progress=true, 
-    threaded=true,
+    threaded=false,
     fill=true,
-    allocs=_burning_allocs(B; threaded), 
     geometrycolumn=nothing,
+    burncheck_metadata=Metadata(),
+    allocs=_burning_allocs(B; threaded, burncheck_metadata), 
     kw...
 )::Bool
     geoms = _get_geometries(data, geometrycolumn)
@@ -36,8 +37,8 @@ function _burn_geometry!(B::AbstractRaster, trait::Nothing, data;
             geom = _getgeom(geoms, i)
             ismissing(geom) && return nothing
             a = _get_alloc(allocs)
-            B1 = a.buffer
-            burnchecks[i] = _burn_geometry!(B1, geom; fill, allocs=a, lock, kw...)
+            buffer = a.buffer
+            burnchecks[i] = _burn_geometry!(buffer, geom; fill, allocs=a, lock, kw...)
             return nothing
         end
         if fill
@@ -99,14 +100,17 @@ function _burn_geometry!(B::AbstractRaster, ::GI.AbstractGeometryTrait, geom;
             return false
         end
         # Take a view of the geometry extent
-        B1 = view(B, Touches(geomextent))
-        buf1 = _init_bools(B1; missingval=false)
+        V = view(B, Touches(geomextent))
+        buffer = _init_bools(V; missingval=false)
         # Burn the polygon into the buffer
-        allocs = isnothing(allocs) ? Allocs(B) : allocs
-        hasburned = _burn_polygon!(buf1, geom; shape, geomextent, allocs, boundary, kw...)
-        @inbounds for i in eachindex(B1)
-            if buf1[i]
-                B1[i] = fill
+        # We allocate a new bitarray for the view for performance
+        # and always fill with `true`. 
+        allocs = isnothing(allocs) ? Allocs(nothing) : allocs
+        hasburned = _burn_polygon!(buffer, geom; shape, geomextent, allocs, boundary, kw...)
+        # We then transfer burned `true` values to B via the V view
+        @inbounds for i in eachindex(V)
+            if buffer[i]
+                V[i] = fill
             end
         end
     else

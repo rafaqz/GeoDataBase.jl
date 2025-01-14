@@ -95,15 +95,15 @@ dim(lookup::Projected) = lookup.dim
 end
 @inline function LA.selectindices(l::Projected, sel::LA.Selector{<:AbstractVector}; kw...)
     selval = reproject(mappedcrs(l), crs(l), dim(l), val(sel))
-    _selectvec(l, rebuild(sel; val=selval)sel; kw...)
+    LA._selectvec(l, rebuild(sel; val=selval); kw...)
 end
 @inline function LA.selectindices(l::Projected, sel::LA.IntSelector{<:Tuple}; kw...)
     selval = reproject(mappedcrs(l), crs(l), dim(l), val(sel))
-    _selecttuple(l, rebuild(sel; val=selval); kw...)
+    LA._selecttuple(l, rebuild(sel; val=selval); kw...)
 end
 @inline LA.selectindices(l::Projected{<:Tuple}, sel::LA.IntSelector{<:Tuple}; kw...) = LA._selectindices(l, sel; kw...)
 @inline LA.selectindices(l::Projected{<:Tuple}, sel::LA.IntSelector{<:Tuple{<:Tuple,<:Tuple}}; kw...) = 
-    _selecttuple(l, sel; kw...)
+    LA._selecttuple(l, sel; kw...)
 
 function LA.selectindices(l::Projected, sel::Between{<:Tuple})
     selval = map(v -> reproject(mappedcrs(l), crs(l), dim(l), v), val(sel))

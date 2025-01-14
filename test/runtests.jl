@@ -10,16 +10,18 @@ using Rasters, Test, Aqua, SafeTestsets
 end
 
 @time @safetestset "extensions" begin include("extensions.jl") end
-@time @safetestset "methods" begin include("methods.jl") end
 @time @safetestset "array" begin include("array.jl") end
 @time @safetestset "stack" begin include("stack.jl") end
 @time @safetestset "series" begin include("series.jl") end
 @time @safetestset "create" begin include("create.jl") end
 @time @safetestset "utils" begin include("utils.jl") end
 @time @safetestset "set" begin include("set.jl") end
-@time @safetestset "aggregate" begin include("aggregate.jl") end
-@time @safetestset "rasterize" begin include("rasterize.jl") end
 @time @safetestset "adapt" begin include("adapt.jl") end
+@time @safetestset "methods" begin include("methods.jl") end
+@time @safetestset "aggregate" begin include("aggregate.jl") end
+@time @safetestset "mosaic" begin include("mosaic.jl") end
+@time @safetestset "rasterize" begin include("rasterize.jl") end
+@time @safetestset "extract" begin include("extract.jl") end
 @time @safetestset "reproject" begin include("reproject.jl") end
 @time @safetestset "warp" begin include("warp.jl") end
 @time @safetestset "cellarea" begin include("cellarea.jl") end

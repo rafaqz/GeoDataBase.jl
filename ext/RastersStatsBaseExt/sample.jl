@@ -52,6 +52,7 @@ function _getindex(::Type{T}, x::AbstractRasterStack{<:Any, NT}, dims, idx) wher
     RA._maybe_add_fields(
         T, 
         NT(x[RA.commondims(idx, x)]), 
+        nothing,
         DimPoints(dims)[RA.commondims(idx, dims)], 
         val(idx)
     )

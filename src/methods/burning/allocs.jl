@@ -11,22 +11,36 @@ function Allocs(buffer)
     return Allocs(buffer, edges, scratch, crossings)
 end
 
-function _burning_allocs(x; nthreads=_nthreads(), threaded=true, kw...) 
-    dims = commondims(x, DEFAULT_POINT_ORDER)
+function _burning_allocs(x; 
+    nthreads=_nthreads(), 
+    threaded=true, 
+    burncheck_metadata=Metadata(),
+    kw...
+) 
     if threaded
-        [Allocs(_init_bools(dims; metadata=Metadata())) for _ in 1:nthreads]
+        if isnothing(x)
+            [Allocs(nothing) for _ in 1:nthreads]
+        else
+            dims = commondims(x, DEFAULT_POINT_ORDER)
+            [Allocs(_init_bools(dims; metadata=deepcopy(burncheck_metadata))) for _ in 1:nthreads]
+        end
     else
-        Allocs(_init_bools(dims; metadata=Metadata()))
+        if isnothing(x)
+            Allocs()
+        else
+            dims = commondims(x, DEFAULT_POINT_ORDER)
+            Allocs(_init_bools(dims; metadata=burncheck_metadata))
+        end
     end
 end
 
 _get_alloc(allocs::Vector{<:Allocs}) = _get_alloc(allocs[Threads.threadid()])
 _get_alloc(allocs::Allocs) = allocs
 
-
 # TODO include these in Allocs
 _alloc_burnchecks(n::Int) = fill(false, n)
 _alloc_burnchecks(x::AbstractArray) = _alloc_burnchecks(length(x))
+
 function _set_burnchecks(burnchecks, metadata::Metadata{<:Any,<:Dict}, verbose)
     metadata["missed_geometries"] = .!burnchecks
     verbose && _burncheck_info(burnchecks)

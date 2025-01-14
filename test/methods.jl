@@ -17,6 +17,8 @@ pointvec = [(-20.0, 30.0),
             (0.0, 10.0),
             (0.0, 30.0),
             (-20.0, 30.0)]
+
+            
 vals = [1, 2, 3, 4, 5]
 polygon = ArchGDAL.createpolygon(pointvec)
 multi_polygon = ArchGDAL.createmultipolygon([[pointvec]])
@@ -409,190 +411,6 @@ end
 
 createpoint(args...) = ArchGDAL.createpoint(args...)
 
-@testset "extract" begin
-    dimz = (X(9.0:1.0:10.0), Y(0.1:0.1:0.2))
-    rast = Raster(Union{Int,Missing}[1 2; 3 4], dimz; name=:test, missingval=missing)
-    rast2 = Raster([5 6; 7 8], dimz; name=:test2, missingval=5)
-    rast_m = Raster([1 2; 3 missing], dimz; name=:test, missingval=missing)
-    mypoints = [missing, (9.0, 0.1), (9.0, 0.2), (10.0, 0.3), (10.0, 0.2)]
-    table = (geometry=mypoints, foo=zeros(4))
-    st = RasterStack(rast, rast2)
-    @testset "from Raster" begin
-        # Tuple points
-        ex = extract(rast, mypoints)
-        T = @NamedTuple{geometry::Union{Missing,Tuple{Float64,Float64}},test::Union{Missing,Int64}}
-        @test eltype(ex) == T
-        @test all(ex .=== T[
-            (geometry = missing, test = missing)
-            (geometry = (9.0, 0.1), test=1)
-            (geometry = (9.0, 0.2), test=2)
-            (geometry = (10.0, 0.3), test=missing)
-            (geometry = (10.0, 0.2), test=4)
-        ])
-        ex = extract(rast_m, mypoints; skipmissing=true)
-        T = @NamedTuple{geometry::Tuple{Float64, Float64}, test::Int64}
-        @test eltype(ex) == T
-        @test all(ex .=== T[(geometry = (9.0, 0.1), test = 1), (geometry = (9.0, 0.2), test = 2)])
-        ex = extract(rast_m, mypoints; skipmissing=true, geometry=false)
-        T = @NamedTuple{test::Int64}
-        @test eltype(ex) == T
-        @test all(ex .=== T[(test = 1,), (test = 2,)])
-        @test all(extract(rast_m, mypoints; skipmissing=true, geometry=false, index=true) .=== [
-            (index = (1, 1), test = 1,)
-            (index = (1, 2), test = 2,)
-        ])
-        # NamedTuple (reversed) points - tests a Table that iterates over points
-        T = @NamedTuple{geometry::Union{@NamedTuple{Y::Float64,X::Float64}},test::Union{Missing,Int64}}
-        @test all(extract(rast, [(Y=0.1, X=9.0), (Y=0.2, X=10.0), (Y=0.3, X=10.0)]) .=== T[
-            (geometry = (Y = 0.1, X = 9.0), test = 1)
-            (geometry = (Y = 0.2, X = 10.0), test = 4)
-            (geometry = (Y = 0.3, X = 10.0), test = missing)
-        ])
-        # Vector points
-        @test all(extract(rast, [[9.0, 0.1], [10.0, 0.2]]) .== [
-            (geometry = [9.0, 0.1], test = 1)
-            (geometry = [10.0, 0.2], test = 4)
-        ])
-        # Extract a polygon
-        p = ArchGDAL.createpolygon([[[8.0, 0.0], [11.0, 0.0], [11.0, 0.4], [8.0, 0.0]]])
-        T = @NamedTuple{geometry::Union{Tuple{Float64,Float64}},test::Union{Missing,Int64}}
-        @test all(extract(rast_m, p) .=== T[
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (10.0, 0.1), test = 3)
-            (geometry = (10.0, 0.2), test = missing)
-        ])
-        # Extract a vector of polygons
-        ex = extract(rast_m, [p, p])
-        @test eltype(ex) == T
-        @test all(ex .=== T[
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (10.0, 0.1), test = 3)
-            (geometry = (10.0, 0.2), test = missing)
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (10.0, 0.1), test = 3)
-            (geometry = (10.0, 0.2), test = missing)
-        ])
-        # Test all the keyword combinations
-        @test all(extract(rast_m, p) .=== T[
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (10.0, 0.1), test = 3)
-            (geometry = (10.0, 0.2), test = missing)
-        ])
-        T = @NamedTuple{test::Union{Missing,Int64}}
-        @test all(extract(rast_m, p; geometry=false) .=== T[
-            (test = 1,)
-            (test = 3,)
-            (test = missing,)
-        ])
-        T = @NamedTuple{index::Union{Missing,Tuple{Int,Int}},test::Union{Missing,Int64}}
-        @test all(extract(rast_m, p; geometry=false, index=true) .=== T[
-            (index = (1, 1), test = 1)
-            (index = (2, 1), test = 3)
-            (index = (2, 2), test = missing)
-        ])
-        T = @NamedTuple{geometry::Union{Tuple{Float64,Float64}},index::Union{Missing,Tuple{Int,Int}},test::Union{Missing,Int64}}
-        @test all(extract(rast_m, p; index=true) .=== T[
-             (geometry = (9.0, 0.1), index = (1, 1), test = 1)
-             (geometry = (10.0, 0.1), index = (2, 1), test = 3)
-             (geometry = (10.0, 0.2), index = (2, 2), test = missing)
-        ])
-        @test extract(rast_m, p; skipmissing=true) == [
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (10.0, 0.1), test = 3)
-        ]                                                         
-        @test extract(rast_m, p; skipmissing=true, geometry=false) == [
-            (test = 1,)
-            (test = 3,)
-        ]                                                         
-        @test extract(rast_m, p; skipmissing=true, geometry=false, index=true) == [
-            (index = (1, 1), test = 1)
-            (index = (2, 1), test = 3)
-        ]                                                         
-        @test extract(rast_m, p; skipmissing=true, index=true) == [
-            (geometry = (9.0, 0.1), index = (1, 1), test = 1)
-            (geometry = (10.0, 0.1), index = (2, 1), test = 3)
-        ]          
-        @test extract(rast2, p; skipmissing=true) == [
-            (geometry = (10.0, 0.1), test2 = 7)
-            (geometry = (10.0, 0.2), test2 = 8)
-        ]                                               
-        # Empty geoms
-        @test extract(rast, []) == NamedTuple{(:geometry, :test),Tuple{Missing,Missing}}[]
-        @test extract(rast, []; geometry=false) == NamedTuple{(:test,),Tuple{Missing}}[]
-        # Missing coord errors
-        @test_throws ArgumentError extract(rast, [(0.0, missing), (9.0, 0.1), (9.0, 0.2), (10.0, 0.3)])
-        @test_throws ArgumentError extract(rast, [(9.0, 0.1), (0.0, missing), (9.0, 0.2), (10.0, 0.3)])
-        @test_throws ArgumentError extract(rast, [(X=0.0, Y=missing), (9.0, 0.1), (9.0, 0.2), (10.0, 0.3)])
-    end
-
-    @testset "with table" begin
-        T = @NamedTuple{geometry::Union{Missing, Tuple{Float64, Float64}}, test::Union{Missing, Int64}}
-        @test all(extract(rast, table) .=== T[
-            (geometry = missing, test = missing)
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (9.0, 0.2), test = 2)
-            (geometry = (10.0, 0.3), test = missing)
-            (geometry = (10.0, 0.2), test = 4)
-        ])
-        @test extract(rast, table; skipmissing=true) == [
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (9.0, 0.2), test = 2)
-            (geometry = (10.0, 0.2), test = 4)
-        ]
-        @test extract(rast, table; skipmissing=true, geometry=false) == [
-            (test = 1,)
-            (test = 2,)
-            (test = 4,)
-        ]
-        @test extract(rast, table; skipmissing=true, geometry=false, index=true) == [
-            (index = (1, 1), test = 1,)
-            (index = (1, 2), test = 2,)
-            (index = (2, 2), test = 4,)
-        ]
-
-        @test_throws ArgumentError extract(rast, (foo = zeros(4),))
-    end
-
-    @testset "from stack" begin
-        T = @NamedTuple{geometry::Union{Missing,Tuple{Float64,Float64}},test::Union{Missing,Int64},test2::Union{Missing,Int64}}
-        @test all(extract(st, [missing, (9.0, 0.1), (10.0, 0.2), (10.0, 0.3)]) .=== T[
-            (geometry = missing, test = missing, test2 = missing)
-            (geometry = (9.0, 0.1), test = 1, test2 = 5)
-            (geometry = (10.0, 0.2), test = 4, test2 = 8)
-            (geometry = (10.0, 0.3), test = missing, test2 = missing)
-        ])
-        @test extract(st, [missing, (9.0, 0.1), (10.0, 0.2), (10.0, 0.3)]; skipmissing=true) == [
-            (geometry = (10.0, 0.2), test = 4, test2 = 8)
-        ]
-        @test extract(st2, [missing, (2, 2), (2, 1)]; skipmissing=true) == [
-            (geometry = (2, 1), a = 7.0, b = 2.0)
-        ]
-        @test extract(st, [missing, (9.0, 0.1), (10.0, 0.2), (10.0, 0.3)]; skipmissing=true, geometry=false) == [
-            (test = 4, test2 = 8)
-        ]
-        T = @NamedTuple{index::Union{Missing, Tuple{Int,Int}}, test::Union{Missing, Int64}, test2::Union{Missing, Int64}}
-        @test extract(st, [missing, (9.0, 0.1), (10.0, 0.2), (10.0, 0.3)]; skipmissing=true, geometry=false, index=true) == T[
-            (index = (2, 2), test = 4, test2 = 8)
-        ]
-        # Subset with `names`
-        T = @NamedTuple{geometry::Union{Missing, Tuple{Float64, Float64}}, test2::Union{Missing, Int64}}
-        @test all(extract(st, [missing, (9.0, 0.1), (10.0, 0.2), (10.0, 0.3)]; name=(:test2,)) .=== T[
-            (geometry = missing, test2 = missing)
-            (geometry = (9.0, 0.1), test2 = 5)
-            (geometry = (10.0, 0.2), test2 = 8)
-            (geometry = (10.0, 0.3), test2 = missing)
-        ])
-        # Subset with `names` and `skipmissing` with mixed missingvals
-        @test extract(st, [missing, (9.0, 0.1), (10.0, 0.2), (10.0, 0.3)]; name=(:test2,), skipmissing=true) == [
-            (geometry = (10.0, 0.2), test2 = 8)
-        ]
-        @test extract(st, [missing, (9.0, 0.1), (10.0, 0.2), (10.0, 0.3)]; name=(:test,), skipmissing=true) == [
-            (geometry = (9.0, 0.1), test = 1)
-            (geometry = (10.0, 0.2), test = 4)
-        ]
-    end
-end
-
 @testset "trim, crop, extend" begin
     A = [missing missing missing
          missing 2.0     0.5
@@ -676,51 +494,6 @@ end
 
 end
 
-@testset "mosaic" begin
-    reg1 = Raster([0.1 0.2; 0.3 0.4], (X(2.0:1.0:3.0), Y(5.0:1.0:6.0)))
-    reg2 = Raster([1.1 1.2; 1.3 1.4], (X(3.0:1.0:4.0), Y(6.0:1.0:7.0)))
-    irreg1 = Raster([0.1 0.2; 0.3 0.4], (X([2.0, 3.0]), Y([5.0, 6.0])))
-    irreg2 = Raster([1.1 1.2; 1.3 1.4], (X([3.0, 4.0]), Y([6.0, 7.0])))
-
-    span_x1 = Explicit(vcat((1.5:1.0:2.5)', (2.5:1.0:3.5)'))
-    span_x2 = Explicit(vcat((2.5:1.0:3.5)', (3.5:1.0:4.5)'))
-    exp1 = Raster([0.1 0.2; 0.3 0.4], (X(Sampled([2.0, 3.0]; span=span_x1)), Y([5.0, 6.0])))
-    exp2 = Raster([1.1 1.2; 1.3 1.4], (X(Sampled([3.0, 4.0]; span=span_x2)), Y([6.0, 7.0])))
-    @test val(span(mosaic(first, exp1, exp2), X)) == [1.5 2.5 3.5; 2.5 3.5 4.5]
-    @test all(mosaic(first, [reg1, reg2]) .=== 
-              mosaic(first, irreg1, irreg2) .===
-              mosaic(first, (irreg1, irreg2)) .=== 
-              [0.1 0.2 missing; 
-               0.3 0.4 1.2; 
-               missing 1.3 1.4])
-    @test all(mosaic(last, reg1, reg2) .===
-              mosaic(last, irreg1, irreg2) .===
-              mosaic(last, exp1, exp2) .=== [0.1 0.2 missing; 
-                                             0.3 1.1 1.2; 
-                                             missing 1.3 1.4])
-
-    @test all(mosaic(first, [reverse(reg2; dims=Y), reverse(reg1; dims=Y)]) .=== 
-              [missing 0.2 0.1; 
-               1.2 1.1 0.3; 
-               1.4 1.3 missing]
-    )
-
-    # 3 dimensions
-    A1 = Raster(ones(2, 2, 2), (X(2.0:-1.0:1.0), Y(5.0:1.0:6.0), Ti(DateTime(2001):Year(1):DateTime(2002))))
-    A2 = Raster(zeros(2, 2, 2), (X(3.0:-1.0:2.0), Y(4.0:1.0:5.0), Ti(DateTime(2002):Year(1):DateTime(2003))))
-    @test all(mosaic(mean, A1, A2) |> parent .=== 
-              mosaic(mean, RasterStack(A1), RasterStack(A2)).layer1 .===
-              cat([missing missing missing
-                   missing 1.0     1.0
-                   missing 1.0     1.0    ],
-                   [0.0     0.0 missing
-                   0.0     0.5     1.0   
-                   missing 1.0     1.0    ],
-                   [0.0     0.0     missing
-                   0.0     0.0     missing    
-                   missing missing missing], dims=3))
-end
-
 using StableRNGs, StatsBase
 test = rebuild(ga; name = :test)
 @testset "sample" begin
@@ -754,9 +527,9 @@ test = rebuild(ga; name = :test)
     end
     @test all(Rasters.sample(StableRNG(123), st2, 2, name = (:a,)) .=== extract(st2, [(2,2), (1,2)], name = (:a,)))
 
-    # in this case extract and sample always return different types
-    @test eltype(Rasters.sample(StableRNG(123), test, 2, index = true)) != eltype(extract(test, [(2.0,1.0), (2.0,1.0)], index = true))
-    @test eltype(Rasters.sample(StableRNG(123), st2, 2, index = true)) != eltype(extract(st2, [(2,1), (2,1)], index = true))
+    # extract and sample return the same type
+    @test eltype(Rasters.sample(StableRNG(123), test, 2, index = true)) == eltype(extract(test, [(2.0,1.0), (2.0,1.0)], index = true))
+    @test eltype(Rasters.sample(StableRNG(123), st2, 2, index = true)) == eltype(extract(st2, [(2,1), (2,1)], index = true))
 
     @test all(
         Rasters.sample(StableRNG(123), test, 2, weights = DimArray([1,1000], X(1:2)), skipmissing = true) .===

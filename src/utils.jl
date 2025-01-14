@@ -284,7 +284,6 @@ end
 # to distinguish between objects returned by _get_geometries and other objects
 struct IterableOfGeometries end
 
-
 # Chunking
 
 # NoKW means true
@@ -434,7 +433,7 @@ end
 
 # Other
 
-_progress(args...; kw...) = ProgressMeter.Progress(args...; color=:blue, barlen=50, kw...)
+_progress(args...; kw...) = ProgressMeter.Progress(args...; dt=0.1, color=:blue, barlen=50, kw...)
 
 # Function barrier for splatted vector broadcast
 @noinline _do_broadcast!(f, x, args...) = broadcast!(f, x, args...)
@@ -525,47 +524,48 @@ _names(A::AbstractRaster) = (Symbol(name(A)),)
 _names(A::AbstractRasterStack) = keys(A)
 
 using DimensionalData.Lookups: _True, _False
+
+_booltype(::_True) = _True()
+_booltype(::_False) = _False()
 _booltype(x) = x ? _True() : _False()
+
 istrue(::_True) = true
 istrue(::_False) = false
+istrue(::Type{_True}) = true
+istrue(::Type{_False}) = false
 
 # skipinvalid: can G and I be missing. skipmissing: can nametypes be missing
 _rowtype(x, g, args...; kw...) = _rowtype(x, typeof(g), args...; kw...)
 function _rowtype(
     x, ::Type{G}, i::Type{I} = typeof(size(x)); 
-    geometry, index, skipmissing, skipinvalid = skipmissing, names, kw...
+    id=_False(), geometry, index, skipmissing, skipinvalid=skipmissing, names, kw...
 ) where {G, I}
     _G = istrue(skipinvalid) ? nonmissingtype(G) : G
     _I = istrue(skipinvalid) ? I : Union{Missing, I}
-    keys = _rowkeys(geometry, index, names)
-    types = _rowtypes(x, _G, _I, geometry, index, skipmissing, names)
+    keys = _rowkeys(id, geometry, index, names)
+    types = _rowtypes(x, _G, _I, id, geometry, index, skipmissing, names)
     NamedTuple{keys,types}
 end
 
-
-function _rowtypes(
-    x, ::Type{G}, ::Type{I}, geometry::_True, index::_True, skipmissing, names::NamedTuple{Names}
+@generated function _rowtypes(
+    x, ::Type{G}, ::Type{I}, id, geometry, index, skipmissing, names::NamedTuple{Names}
 ) where {G,I,Names}
-    Tuple{G,I,_nametypes(x, names, skipmissing)...}
-end
-function _rowtypes(
-    x, ::Type{G}, ::Type{I}, geometry::_True, index::_False, skipmissing, names::NamedTuple{Names}
-) where {G,I,Names}
-    Tuple{G,_nametypes(x, names, skipmissing)...}
-end
-function _rowtypes(
-    x, ::Type{G}, ::Type{I}, geometry::_False, index::_True, skipmissing, names::NamedTuple{Names}
-) where {G,I,Names}
-    Tuple{I,_nametypes(x, names, skipmissing)...}
-end
-function _rowtypes(
-    x, ::Type{G}, ::Type{I}, geometry::_False, index::_False, skipmissing, names::NamedTuple{Names}
-) where {G,I,Names}
-    Tuple{_nametypes(x, names, skipmissing)...}
+    ts = Expr(:tuple)
+    istrue(id) && push!(ts.args, Int)
+    if istrue(skipmissing)
+        istrue(geometry) && push!(ts.args, G)
+        istrue(index) && push!(ts.args, I)
+    else
+        istrue(geometry) && push!(ts.args, Union{Missing,G})
+        istrue(index) && push!(ts.args, Union{Missing,I})
+    end
+    :(Tuple{$ts...,_nametypes(x, names, skipmissing)...})
 end
 
-@inline _nametypes(::Raster{T}, ::NamedTuple{Names}, skipmissing::_True) where {T,Names} = (nonmissingtype(T),)
-@inline _nametypes(::Raster{T}, ::NamedTuple{Names}, skipmissing::_False) where {T,Names} = (Union{Missing,T},)
+@inline _nametypes(::Raster{T}, ::NamedTuple{Names}, sm::_True) where {T,Names} = 
+    (nonmissingtype(T),)
+@inline _nametypes(::Raster{T}, ::NamedTuple{Names}, sm::_False) where {T,Names} = 
+    (Union{Missing,T},)
 # This only compiles away when generated
 @generated function _nametypes(
     ::RasterStack{<:Any,T}, ::NamedTuple{PropNames}, skipmissing::_True
@@ -580,7 +580,11 @@ end
     return values(nt[PropNames])
 end
 
-_rowkeys(geometry::_False, index::_False, names::NamedTuple{Names}) where Names = Names
-_rowkeys(geometry::_True, index::_False, names::NamedTuple{Names}) where Names = (:geometry, Names...)
-_rowkeys(geometry::_True, index::_True, names::NamedTuple{Names}) where Names = (:geometry, :index, Names...)
-_rowkeys(geometry::_False, index::_True, names::NamedTuple{Names}) where Names = (:index, Names...)
+_rowkeys(id::_True, geometry::_False, index::_False, names::NamedTuple{Names}) where Names = (:id, Names...)
+_rowkeys(id::_True, geometry::_True, index::_False, names::NamedTuple{Names}) where Names = (:id, :geometry, Names...)
+_rowkeys(id::_True, geometry::_True, index::_True, names::NamedTuple{Names}) where Names = (:id, :geometry, :index, Names...)
+_rowkeys(id::_True, geometry::_False, index::_True, names::NamedTuple{Names}) where Names = (:id, :index, Names...)
+_rowkeys(id::_False, geometry::_False, index::_False, names::NamedTuple{Names}) where Names = Names
+_rowkeys(id::_False, geometry::_True, index::_False, names::NamedTuple{Names}) where Names = (:geometry, Names...)
+_rowkeys(id::_False, geometry::_True, index::_True, names::NamedTuple{Names}) where Names = (:geometry, :index, Names...)
+_rowkeys(id::_False, geometry::_False, index::_True, names::NamedTuple{Names}) where Names = (:index, Names...)

@@ -1,4 +1,3 @@
-
 """
     reproject(obj; crs)
 
@@ -61,17 +60,14 @@ function _reproject(source::GeoFormat, target::GeoFormat, dim::Union{XDim,YDim},
     # This is a dumb way to do this. But it save having to inspect crs, 
     # and prevents reprojections that don't make sense from working.
     # A better method for this should be implemented in future.
-    return first(reproject(source, target, dim, [val]))
+    return first(_reproject(source, target, dim, [val]))
 end
 function _reproject(source::GeoFormat, target::GeoFormat, dim, vals::NTuple{N}) where N
-    reps = reproject(source, target, dim, [vals...])
+    reps = _reproject(source, target, dim, [vals...])
     return ntuple(x -> reps[x], N)
 end
 function _reproject(source::GeoFormat, target::GeoFormat, dim::Union{XDim,YDim}, vals::AbstractArray) 
-    reshape(reproject(source, target, dim, vec(vals)), size(vals))
-end
-function _reproject(source::Nothing, target::GeoFormat, dim::Union{XDim,YDim}, vals::AbstractArray) 
-    reshape(reproject(source, target, dim, vec(vals)), size(vals))
+    reshape(_reproject(source, target, dim, vec(vals)), size(vals))
 end
 function _reproject(source::GeoFormat, target::GeoFormat, dim::Union{XDim,YDim}, vals::AbstractVector) 
     throw_extension_error(reproject, "Proj", :RastersProjExt, (source, target, dim, vals))

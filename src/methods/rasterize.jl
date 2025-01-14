@@ -1,4 +1,4 @@
-struct _TakeFirst{MV}
+struct _TakeFirst{MV} <: Function
     missingval::MV
 end
 (tf::_TakeFirst)(a, b) = a === tf.missingval ? b : a
@@ -316,15 +316,10 @@ const RASTERIZE_KEYWORDS = """
 - `op`: A reducing function that accepts two values and returns one, like `min` to `minimum`.
     For common methods this will be assigned for you, or is not required. But you can use it
     instead of a `reducer` as it will usually be faster.
-- `shape`: force `data` to be treated as `:polygon`, `:line` or `:point`, where possible
-    Points can't be treated as lines or polygons, and lines may not work as polygons, but
-    an attempt will be made.
-- `geometrycolumn`: `Symbol` to manually select the column the geometries are in
-    when `data` is a Tables.jl compatible table, or a tuple of `Symbol` for columns of
-    point coordinates.
-- `progress`: show a progress bar, `true` by default, `false` to hide..
-- `verbose`: print information and warnings when there are problems with the rasterisation.
-    `true` by default.
+$GEOM_KEYWORDS
+$GEOMETRYCOLUMN_KEYWORD
+$PROGRESS_KEYWORD
+$VERBOSE_KEYWORD
 $THREADED_KEYWORD
 - `threadsafe`: specify that custom `reducer` and/or `op` functions are thread-safe, 
     in that the order of operation or blocking does not matter. For example, 
@@ -360,8 +355,6 @@ $RASTERIZE_ARGUMENTS
 
 These are detected automatically from `data` where possible.
 
-$GEOMETRYCOLUMN_KEYWORD
-$GEOM_KEYWORDS
 $RASTERIZE_KEYWORDS
 $FILENAME_KEYWORD
 $SUFFIX_KEYWORD
