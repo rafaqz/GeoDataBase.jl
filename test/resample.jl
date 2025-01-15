@@ -64,9 +64,7 @@ include(joinpath(dirname(pathof(Rasters)), "../test/test_utils.jl"))
         resampled = resample(cea; method)
         @test crs(cea) == crs(resampled)
         @test cea == resampled
-        # There is some floating point error here after Rasters -> GDAL -> Rasterss...
-        # Should we correct it by detecting almost identical extent and using the original?
-        # @test_broken extent(cea) == extent(resampled)
+        @test extent(cea) == extent(resampled)
     end
 
     @testset "only `res` kw changes the array size predictably" begin

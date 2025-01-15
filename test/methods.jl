@@ -762,3 +762,14 @@ test = rebuild(ga; name = :test)
     @test_throws "strictly positive" Rasters.sample(StableRNG(123), test, 3, skipmissing = true, replace = false)
     @test_throws "Cannot draw" Rasters.sample(StableRNG(123), test, 5, replace = false)
 end
+
+@testset "extent" begin
+    ga = Raster(A, (X(1.0:1:2.0), Y(1.0:1:2.0)); missingval=missing) 
+    ext = extent(ga)
+    @test ext === Extent(X=(1.0,2.0), Y=(1.0,2.0))
+    @test Rasters._extent(ext) === ext
+
+    ga2 = Raster(A, (X(Float32.(1:2)), Y(Float32.(1:2))))
+    @test ext2 === Extent(X=(1.0f0,2.0f0), Y=(1.0f0,2.0f0))
+    @test Rasters._extent(ext2) === ext # currently this converts to float64!
+end
