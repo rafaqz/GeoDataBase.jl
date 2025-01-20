@@ -22,6 +22,7 @@ end
 @time @safetestset "reproject" begin include("reproject.jl") end
 @time @safetestset "warp" begin include("warp.jl") end
 @time @safetestset "cellarea" begin include("cellarea.jl") end
+@time @safetestset "geometrylookups" begin include("geometry_lookups.jl") end
 
 # CommondataModel sources
 @time @safetestset "commondatamodel" begin include("sources/commondatamodel.jl") end
