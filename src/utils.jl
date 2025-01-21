@@ -140,46 +140,74 @@ function _without_mapped_crs(f, st::AbstractRasterStack, mappedcrs::GeoFormat)
     end
 end
 
-function _extent2dims(to; size=nothing, res=nothing, crs=nothing, kw...) 
-    _extent2dims(to, size, res, crs)
+function _extent2dims(to; 
+    size=nothing, res=nothing, crs=nothing, sampling=Intervals(Start()), closed=true, kw...
+) 
+    _extent2dims(to, size, res, crs, sampling, closed)
 end
-function _extent2dims(to::Extents.Extent, size::Nothing, res::Nothing, crs)
+function _extent2dims(to::Extents.Extent, size::Nothing, res::Nothing, crs, sampling, closed)
     isnothing(res) && throw(ArgumentError("Pass either `size` or `res` keywords or a `Tuple` of `Dimension`s for `to`."))
 end
-function _extent2dims(to::Extents.Extent, size, res, crs)
+function _extent2dims(to::Extents.Extent, size, res, crs, sampling, closed)
     isnothing(res) || _size_and_res_error()
 end
-function _extent2dims(to::Extents.Extent{K}, size::Nothing, res::Real, crs) where K
+function _extent2dims(to::Extents.Extent{K}, size::Nothing, res::Real, crs, sampling, closed) where K
     tuple_res = ntuple(_ -> res, length(K))
-    _extent2dims(to, size, tuple_res, crs)
+    _extent2dims(to, size, tuple_res, crs, sampling, closed)
 end
-function _extent2dims(to::Extents.Extent{K}, size::Nothing, res, crs) where K
-    ranges = map(values(to), res) do bounds, r
-        start, stop_closed = bounds
-        stop_open = stop_closed + maybe_eps(stop_closed; grow=false)
-        length = ceil(Int, (stop_open - start) / r)
-        range(; start, step=r, length)
+function _extent2dims(to::Extents.Extent{K}, size::Nothing, res, crs, sampling, closed) where K
+    ranges = if sampling isa Intervals 
+        map(values(to), res) do bounds, r
+            start, stop_closed = bounds
+            # Always add an eps buffer ignoring `closed`, it will 
+            # be trimmed in `range` anyway as the step size is fixed
+            stop_open = stop_closed + maybe_eps(stop_closed; grow=false) 
+            length = ceil(Int, (stop_open - start) / r)
+            range(; start, step=r, length)
+        end
+    else
+        map(values(to), res) do bounds, r
+            # No added eps for Points, as the Raster has closed interval extents
+            # TODO handle all of this in Extents.jl
+            start, stop = bounds
+            length = ceil(Int, (stop - start) / r) + 1
+            rnge = range(; start, step=r, length)
+            @show rnge r length start stop
+            rnge
+        end
     end
-    return _extent2dims(to, ranges, crs)
+    return _extent2dims(to, ranges, crs, sampling)
 end
-function _extent2dims(to::Extents.Extent{K}, size, res::Nothing, crs) where K
+function _extent2dims(to::Extents.Extent{K}, size, res::Nothing, crs, sampling, closed) where K
     if size isa Int
         size = ntuple(_ -> size, length(K))
     end
-    ranges = map(values(to), size) do bounds, length
-        start, stop_closed = bounds
-        stop_open = stop_closed + maybe_eps(stop_closed; grow=false)
-        step = (stop_open - start) / length
-        range(; start, step, length)
+    ranges = if sampling isa Intervals
+        # Add an eps buffer for closed interval `Extent` with `Intervals`, 
+        # so that the open upper interval bounds of a Raster always include the 
+        # extent bounds and e.g. boundary points will be rasterized into the raster
+        map(values(to), size) do bounds, length
+            start, stop_closed = bounds
+            stop_open = closed ? stop_closed + maybe_eps(stop_closed; grow=false) : stop_closed
+            step = (stop_open - start) / length
+            range(; start, step, length)
+        end
+    else
+        # No added eps for Points, as the Raster has closed interval extents
+        map(values(to), size) do bounds, length
+            start, stop = bounds
+            step = (stop - start) / (length - 1)
+            range(; start, step, length)
+        end
     end
-    return _extent2dims(to, ranges, crs)
+    return _extent2dims(to, ranges, crs, sampling)
 end
-function _extent2dims(to::Extents.Extent{K}, ranges, crs) where K
+function _extent2dims(to::Extents.Extent{K}, ranges, crs, sampling) where K
     emptydims = map(name2dim, K)
     lookups = map(ranges) do range
         Projected(range;
             order=ForwardOrdered(),
-            sampling=Intervals(Start()),
+            sampling,
             span=Regular(step(range)),
             crs,
         )
