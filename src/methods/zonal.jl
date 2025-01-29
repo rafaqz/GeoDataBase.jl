@@ -4,9 +4,17 @@
 Calculate zonal statistics for the the zone of a `Raster` or `RasterStack`
 covered by the `of` object/s.
 
+Since `f` is the first argument, you can use Julia's `do`-block syntax with `zonal`, 
+like so:
+```julia
+zonal(raster; of = geom) do r # r is an iterator if skipmissing=true, or a raster if skipmissing=false
+    return r # or do some operation
+end
+```
+
 # Arguments
 
-- `f`: any function that reduces an iterable to a single value, such as `sum` or `Statistics.mean`
+- `f`: any function that reduces an iterable to a single value, such as `sum` or `Statistics.mean` - but it can even be `identity`.
 - `x`: A `Raster` or `RasterStack`
 - `of`: A `DimTuple`, `Extent`, $OBJ_ARGUMENT
 
