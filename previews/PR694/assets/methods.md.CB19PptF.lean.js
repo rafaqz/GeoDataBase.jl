@@ -1,0 +1,1 @@
+import{_ as t,c as e,o as a,a7 as s}from"./chunks/framework.LiXp3NzD.js";const y=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"methods.md","filePath":"methods.md","lastUpdated":null}'),r={name:"methods.md"},o=s("",10),l=[o];function d(i,n,c,h,f,p){return a(),e("div",null,l)}const b=t(r,[["render",d]]);export{y as __pageData,b as default};

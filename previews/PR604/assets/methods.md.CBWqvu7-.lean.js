@@ -1,0 +1,1 @@
+import{_ as t,c as e,o as a,a7 as o}from"./chunks/framework.BC9Fsu8r.js";const x=JSON.parse('{"title":"","description":"","frontmatter":{},"headers":[],"relativePath":"methods.md","filePath":"methods.md","lastUpdated":null}'),d={name:"methods.md"},l=o("",10),r=[l];function s(i,n,c,h,f,g){return a(),e("div",null,r)}const m=t(d,[["render",s]]);export{x as __pageData,m as default};
