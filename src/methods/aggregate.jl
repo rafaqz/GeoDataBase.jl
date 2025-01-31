@@ -306,15 +306,23 @@ function disaggregate!(dst::AbstractRaster, src, scale)
 end
 
 # Allocate an array of the correct size to aggregate `A` by `scale`
-alloc_ag(f, method, A::AbstractRaster, scale; kw...) = alloc_ag(f, (method,), A, scale; kw...)
-function alloc_ag(f, method::Tuple, A::AbstractRaster, scale;
-    filename=nokw, suffix=nokw, skipmissingval=false, skipmissing=false, progress=false, verbose=false
+alloc_ag(f, method, A::AbstractRaster, scale; kw...) = 
+    alloc_ag(f, (method,), A, scale; kw...)
+alloc_ag(f, method::Tuple, A::AbstractRaster{<:Any,N}, scale::NTuple{N}; kw...) where N = 
+    alloc_ag(f, (method,), A, map(rebuild, dims(A), scale); kw...)
+function alloc_ag(f, method::Tuple, A::AbstractRaster, scale::DimTuple;
+    filename=nokw, suffix=nokw, 
+    skipmissingval=false, skipmissing=false, progress=false, verbose=false
 )
-    intscale = _scale2int(Ag(), dims(A), scale; verbose=false)
+    intscale = _scale2int(Ag(), dims(A, scale), scale; verbose=false)
     # Aggregate the dimensions
-    dims_ = aggregate.(method, dims(A), intscale)
+    agdims = map(dims(A), intscale) do d, s
+        aggregate(method, d, s)
+    end
+    newdims = dims((agdims..., otherdims(A, scale)...), dims(A)) 
+    
     # Dim aggregation determines the array size
-    sze = map(length, dims_)
+    sze = map(length, newdims)
     agT = ag_eltype(method, A)
     if missingval(A) isa Nothing
         T = agT
@@ -323,25 +331,27 @@ function alloc_ag(f, method::Tuple, A::AbstractRaster, scale;
         T = promote_type(agT, typeof(missingval(A)))
         mv = convert(T, missingval(A))
     end
-    return create(f, filename, T, dims_; name=name(A), suffix, missingval=mv)
+    return create(f, filename, T, newdims; name=name(A), suffix, missingval=mv)
 end
 
 # Allocate an array of the correct size to disaggregate `A` by `scale`
-function alloc_disag(f, method, A::AbstractRaster, scale; kw...)
+alloc_disag(f, method, A::AbstractRaster, scale; kw...) =
     alloc_disag(f, (method,), A, scale; kw...)
-end
-function alloc_disag(f, method::Tuple, A::AbstractRaster, scale;
+alloc_disag(f, method::Tuple, A::AbstractRaster{<:Any,N}, scale::NTuple{N}; kw...) where N =
+    alloc_disag(f, (method,), A, map(rebuild, dims(A), scale); kw...)
+function alloc_disag(f, method::Tuple, A::AbstractRaster, scale::DimTuple;
     filename=nokw, suffix=nokw
 )
-    intscale = _scale2int(DisAg(), dims(A), scale; verbose=false)
-    dims_ = map(dims(A), intscale) do d, i
+    intscale = _scale2int(DisAg(), dims(A, scale), scale; verbose=false)
+    disagdims = map(dims(A, scale), intscale) do d, i
         disaggregate(method, d, i)
     end
+    newdims = dims((disagdims..., otherdims(A, scale)...), dims(A)) 
     # Dim aggregation determines the array size
-    sze = map(length, dims_)
+    sze = map(length, newdims)
     T = ag_eltype(method, A)
     mv = missingval(A) isa Nothing ? nothing : convert(T, missingval(A))
-    return create(f, filename, T, dims_; name=name(A), suffix, missingval=mv)
+    return create(f, filename, T, newdims; name=name(A), suffix, missingval=mv)
 end
 
 # Handle how methods like `mean` can change the type
