@@ -59,12 +59,12 @@ $SOURCE_WRITE_DOCSTRING
 Returns `filename`.
 """
 function Base.write(filename::AbstractString, A::AbstractRaster;
-    source=_sourcetrait(filename),
+    source=sourcetrait(filename),
     missingval=nokw,
     kw...
 )
     missingval = isnokw(missingval) ? Rasters.missingval(A) : missingval
-    write(filename, _sourcetrait(source), A; missingval, kw...)
+    write(filename, sourcetrait(source), A; missingval, kw...)
 end
 Base.write(A::AbstractRaster; kw...) = write(filename(A), A; kw...)
 # Fallback
@@ -100,12 +100,12 @@ $SOURCE_WRITE_DOCSTRING
 function Base.write(path::AbstractString, s::AbstractRasterStack;
     suffix=nothing,
     ext=nothing,
-    source=_sourcetrait(path, ext),
+    source=sourcetrait(path, ext),
     verbose=true,
     missingval=nokw,
     kw...
 )
-    source = _sourcetrait(source)
+    source = sourcetrait(source)
     missingval = _stack_missingvals(s, missingval)
     if haslayers(source)
         write(path, source, s; missingval, kw...)
@@ -182,11 +182,11 @@ $VERBOSE_KEYWORD
 """
 function Base.write(path::AbstractString, A::AbstractRasterSeries;
     ext=nothing,
-    source=_sourcetrait(path, ext),
+    source=sourcetrait(path, ext),
     verbose=true,
     kw...
 )
-    source = _sourcetrait(source)
+    source = sourcetrait(source)
     base, path_ext = splitext(path)
     ext = isnothing(ext) ? path_ext : ext
     map(A, DimPoints(A)) do raster, p

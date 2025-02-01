@@ -183,8 +183,8 @@ function _mod(::Type{T}, missingval, scale, offset, coerce) where T
     end
 end
 
-@inline get_scale(metadata::NoKW, scaled::Bool) = nothing, nothing
-@inline function get_scale(metadata, scaled::Bool)
+get_scale(metadata::NoKW, scaled::Bool) = nothing, nothing
+function get_scale(metadata, scaled::Bool)
     scale = scaled ? get(metadata, "scale", nothing) : nothing
     offset = scaled ? get(metadata, "offset", nothing) : nothing
     return scale, offset

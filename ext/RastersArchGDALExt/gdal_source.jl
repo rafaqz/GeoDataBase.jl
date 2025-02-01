@@ -36,9 +36,11 @@ const GDAL_VIRTUAL_FILESYSTEMS = "/vsi" .* (
 
 
 # TODO more cases of return values here, like wrapped disk arrays
+RA.sourcetrait(A::AG.RasterDataset) = GDALsource()
+RA.sourcetrait(A::AG.Dataset) = GDALsource()
+
 RA.cleanreturn(A::AG.RasterDataset) = Array(A)
 RA.haslayers(::GDALsource) = false
-RA._sourcetrait(A::AG.RasterDataset) = GDALsource()
 
 function Base.write(filename::AbstractString, ::GDALsource, A::AbstractRasterStack; kw...)
     ext = splitext(filename)[2]

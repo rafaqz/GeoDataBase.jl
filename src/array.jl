@@ -297,7 +297,7 @@ function Raster(filename::AbstractString;
     source=nokw,
     kw...
 )
-    source = _sourcetrait(filename, source)
+    source = sourcetrait(filename, source)
     _open(filename; source, mod=NoMod()) do ds
         Raster(ds, filename; source, kw...)
     end::Raster
@@ -331,7 +331,7 @@ function Raster(ds, filename::AbstractString;
     # TODO use a clearer name for this
     name1 = filekey(ds, name)
     # Detect the source from filename
-    source = _sourcetrait(filename, source)
+    source = sourcetrait(filename, source)
     # Open the dataset and variable specified by `name`, at `group` level if provided
     # At this level we do not apply `mod`.
     data_out, dims_out, metadata_out, missingval_out = _open(source, ds; name=name1, group, mod=NoMod()) do var

@@ -65,18 +65,18 @@ function Base.showerror(io::IO, e::BackendException)
 end
 
 # Get the source backend for a file extension, falling back to GDALsource
-_sourcetrait(filename::AbstractString, s::Symbol) = _sourcetrait(s)
-_sourcetrait(filename::AbstractString, s::Source) = s
-_sourcetrait(filename::AbstractString, ::Type{S}) where S<:Source = S()
-_sourcetrait(filename::AbstractString, ::Union{Nothing,NoKW}) = _sourcetrait(filename)
-_sourcetrait(filename::AbstractString, ext::AbstractString) = get(EXT2SOURCE, ext, GDALsource())
-function _sourcetrait(filename::AbstractString)
+sourcetrait(filename::AbstractString, s::Symbol) = sourcetrait(s)
+sourcetrait(filename::AbstractString, s::Source) = s
+sourcetrait(filename::AbstractString, ::Type{S}) where S<:Source = S()
+sourcetrait(filename::AbstractString, ::Union{Nothing,NoKW}) = sourcetrait(filename)
+sourcetrait(filename::AbstractString, ext::AbstractString) = get(EXT2SOURCE, ext, GDALsource())
+function sourcetrait(filename::AbstractString)
     default = GDALsource()
     stem, ext = splitext(filename)
     str = if ext == ""  
         # Handle e.g. "x.zarr/" directories
         if isdirpath(stem) 
-            return _sourcetrait(dirname(stem))
+            return sourcetrait(dirname(stem))
         else
             stem
         end
@@ -85,10 +85,10 @@ function _sourcetrait(filename::AbstractString)
     end
     return get(EXT2SOURCE, str, default)
 end
-_sourcetrait(filenames::NamedTuple) = _sourcetrait(first(filenames))
-_sourcetrait(source::Source) = source
-_sourcetrait(source::Type{<:Source}) = source()
-function _sourcetrait(name::Symbol) 
+sourcetrait(filenames::NamedTuple) = sourcetrait(first(filenames))
+sourcetrait(source::Source) = source
+sourcetrait(source::Type{<:Source}) = source()
+function sourcetrait(name::Symbol) 
     if haskey(SYMBOL2SOURCE, name)
         SYMBOL2SOURCE[name]
     else
@@ -97,7 +97,7 @@ function _sourcetrait(name::Symbol)
 end
 
 # Internal read method
-function _open(f, filename::AbstractString; source=_sourcetrait(filename), kw...)
+function _open(f, filename::AbstractString; source=sourcetrait(filename), kw...)
     _open(f, source, filename; kw...)
 end
 function _open(f, s::Source, filename::AbstractString; kw...)

@@ -1,20 +1,20 @@
-function RA.OpenStack(fs::RA.FileStack{GRIBsource,K}) where K
-    RA.OpenStack{GRIBsource,K}(GDS.GRIBDataset(RA.filename(fs)), fs.mods)
-end
+RA.sourcetrait(::GDS.Variable) = GRIBsource()
+RA.sourcetrait(::GDS.GRIBDataset) = GRIBsource()
+
+RA.sourceconstructor(::Type{GRIBsource}) = GDS.GRIBDataset
+
+RA.checkwritemode(::GRIBsource, filename, append::Bool, force::Bool) =
+    throw(ArgumentError("GRIBDatasets.jl does not support writing"))
+RA.checkfilename(::GRIBsource, filename) =
+    isfile(filename) || _filenotfound_error(filename)
 
 # In GRIBDatasets, the file is open for reading the values and closed afterwards. 
 Base.close(os::RA.OpenStack{GRIBsource}) = nothing
 
-function RA._open(f, ::GRIBsource, filename::AbstractString; write=false, kw...)
-    isfile(filename) || _filenotfound_error(filename)
-    ds = GRIBDatasets.GRIBDataset(filename)
-    RA._open(f, GRIBsource(), ds; kw...)
-end
+RA.missingval(var::GDS.Variable, ::RA.Metadata{GRIBsource}) = _missingval(var)
+RA.missingval(var::GDS.Variable, args...) = _missingval(var)
 
-RA._sourcetrait(::GDS.Variable) = GRIBsource()
-RA._sourcetrait(::GDS.GRIBDataset) = GRIBsource()
-
-function RA.missingval(var::GDS.Variable{T}, args...) where T
+function _missingval(var::GDS.Variable{T}) where T
     mv = GDS.missing_value(var)
     T1 = promote_type(typeof(mv), T)
     return T1(mv)

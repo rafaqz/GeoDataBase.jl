@@ -170,7 +170,7 @@ function create(filename::AbstractString, T::Union{Type,NamedTuple}, dims::Tuple
     lazy=true,
     parent=nokw,
     suffix=nokw,
-    source::Source=_sourcetrait(filename),
+    source::Source=sourcetrait(filename),
     missingval=nokw,
     kw...
 )

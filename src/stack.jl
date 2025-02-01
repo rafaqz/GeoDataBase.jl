@@ -389,7 +389,7 @@ function RasterStack(filenames::NamedTuple{K,<:Tuple{<:AbstractString,Vararg}};
     layerdims = layerdims isa NamedTuple ? collect(layerdims) : map(_ -> NoKW(), fn)
     layers = map(K, fn, layermetadata, layerdims, layermissingval) do name, fn, md, d, mv
         Raster(fn; 
-            source=_sourcetrait(fn, source), 
+            source=sourcetrait(fn, source), 
             dims=d, name, metadata=md, missingval=mv, scaled, verbose, kw...
        )
     end
@@ -413,7 +413,7 @@ function RasterStack(filename::AbstractString;
     _maybe_warn_replace_missing(replace_missing)
     scaled, missingval = _raw_check(raw, scaled, missingval, verbose)
 
-    source = _sourcetrait(filename, source)
+    source = sourcetrait(filename, source)
     st = if isdir(filename) && !(source isa Zarrsource)
         # Load as a whole directory
         filenames = readdir(filename)
